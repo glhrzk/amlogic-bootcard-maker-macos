@@ -1,0 +1,18 @@
+# Build outputs and artefacts
+.build/
+dist/
+*.app
+
+# macOS artefacts
+.DS_Store
+*.swp
+*.swo
+
+# Editor and tool artefacts
+.idea/
+.vscode/
+*.orig
+
+# Python bytecode
+__pycache__/
+*.pyc
