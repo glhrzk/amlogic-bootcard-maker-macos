@@ -1,6 +1,6 @@
 # BootcardMaker for macOS — Design
 
-Date: 2026-11-05. Owner: Galih Rizki. Target machine: Mac with Apple M5,
+Date: 2026-11-05. Target machine: Mac with Apple M5,
 macOS Tahoe, arm64 only. No Windows, no VM (Mac disk full). Code will be
 open-sourced later; no remote is known yet, so the code lives in a new
 local git repo at `~/workspace/bootcardmaker-macos/` and is not pushed
