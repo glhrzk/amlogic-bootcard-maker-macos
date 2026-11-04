@@ -66,7 +66,9 @@ Run on 2026-11-05 on this Linux VM, before the Task 6 commit:
 
 - `git ls-files` listed 22 tracked files (see §4). No `.exe` or `.bin`
   file is tracked. `LICENSE` exists.
-- `git grep -i -n "Galih|galihrizki|password|api_key|apikey|secret|bearer"`
+- A case-insensitive `git grep` over tracked files for owner
+  name/username/email patterns plus credential patterns (`password`,
+  `api_key`, `secret`, `bearer`)
   matched only the word "secret" in prose ("no secrets") in the design
   and plan documents, plus one occurrence of the owner's real name in
   the design document. The name was removed from the design document
