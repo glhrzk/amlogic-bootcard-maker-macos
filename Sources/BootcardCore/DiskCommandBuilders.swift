@@ -43,6 +43,9 @@ public enum DiskCommandError: Error, Equatable {
     case invalidDevicePath
     /// A file path is not absolute.
     case invalidFilePath
+    /// An `hdiutil -size` value is not digits plus an optional
+    /// `b`/`k`/`m`/`g`/`t` suffix.
+    case invalidSize
     /// A sector count is not positive.
     case invalidSectorCount
 }
@@ -162,6 +165,115 @@ public func hdiutilAttachCommand(imagePath: String) throws -> DiskCommand {
         executablePath: "/usr/bin/hdiutil",
         arguments: ["attach", "-nomount", imagePath]
     )
+}
+
+/// `hdiutil attach -nomount -plist <imagePath>`: attach a dry-run
+/// disk image and report the attached nodes as a property list, so
+/// the attached whole-disk identifier can be read without parsing
+/// human-readable `hdiutil` output. The output is parsed by
+/// `parseHdiutilAttachPlist`. Used by Task 5's dry-run mode.
+public func hdiutilAttachPlistCommand(imagePath: String) throws -> DiskCommand {
+    guard isAbsolutePath(imagePath) else {
+        throw DiskCommandError.invalidFilePath
+    }
+    return DiskCommand(
+        executablePath: "/usr/bin/hdiutil",
+        arguments: ["attach", "-nomount", "-plist", imagePath]
+    )
+}
+
+/// `hdiutil create -size <sizeString> -type SPARSE -layout NONE
+/// <imagePath>`: create a blank sparse disk image for dry-run mode.
+/// The image carries no partition map (`-layout NONE`): Task 4's
+/// operation writes the MBR and formats the partition itself, so
+/// the initial contents of the image do not matter, only its size.
+///
+/// Mac-gated: the `-layout NONE` spelling and the meaning of
+/// `sizeString` (digits plus an optional `b`/`k`/`m`/`g`/`t`
+/// suffix) are unverified on Tahoe from this Linux VM. A rejected
+/// spelling fails dry-run creation cleanly, before anything is
+/// attached or written.
+public func hdiutilCreateCommand(imagePath: String, sizeString: String) throws -> DiskCommand {
+    guard isAbsolutePath(imagePath) else {
+        throw DiskCommandError.invalidFilePath
+    }
+    guard isHdiutilSizeString(sizeString) else {
+        throw DiskCommandError.invalidSize
+    }
+    return DiskCommand(
+        executablePath: "/usr/bin/hdiutil",
+        arguments: ["create", "-size", sizeString, "-type", "SPARSE", "-layout", "NONE", imagePath]
+    )
+}
+
+/// `hdiutil detach <devicePath>`: detach an attached dry-run image
+/// after the operation. Best-effort in the caller: a failed detach
+/// never changes the operation's result.
+public func hdiutilDetachCommand(devicePath: String) throws -> DiskCommand {
+    guard isWholeDiskDevicePath(devicePath) else {
+        throw DiskCommandError.invalidDevicePath
+    }
+    return DiskCommand(
+        executablePath: "/usr/bin/hdiutil",
+        arguments: ["detach", devicePath]
+    )
+}
+
+/// Failures parsing `hdiutil attach -plist` output.
+public enum HdiutilAttachParseError: Error, Equatable {
+    /// The data is not a property list at all.
+    case invalidPlist
+    /// The data is a property list but not the expected shape
+    /// (top-level dictionary with a `system-entities` array).
+    case unexpectedFormat
+    /// No whole-disk entity was reported.
+    case noWholeDisk
+}
+
+/// The whole-disk identifier reported by `hdiutil attach -plist`:
+/// the first `system-entities` entry whose `device-identifier` is an
+/// exact `disk<N>` identifier. Partition entities (`disk<N>s1`) are
+/// skipped, never returned.
+///
+/// - Throws: `HdiutilAttachParseError` as documented on the enum.
+public func parseHdiutilAttachPlist(_ plistData: Data) throws -> String {
+    let object: Any
+    do {
+        var format = PropertyListSerialization.PropertyListFormat.xml
+        object = try PropertyListSerialization.propertyList(
+            from: plistData, options: [], format: &format
+        )
+    } catch {
+        throw HdiutilAttachParseError.invalidPlist
+    }
+    guard
+        let top = object as? [String: Any],
+        let entities = top["system-entities"] as? [[String: Any]]
+    else {
+        throw HdiutilAttachParseError.unexpectedFormat
+    }
+    for entity in entities {
+        if let identifier = entity["device-identifier"] as? String,
+           isWholeDiskIdentifier(identifier) {
+            return identifier
+        }
+    }
+    throw HdiutilAttachParseError.noWholeDisk
+}
+
+/// True for an `hdiutil -size` value: digits plus an optional single
+/// suffix letter (`b`, `k`, `m`, `g`, or `t`). Anything else is
+/// rejected so no caller-supplied text can smuggle extra arguments
+/// into the array.
+private func isHdiutilSizeString(_ value: String) -> Bool {
+    guard !value.isEmpty else { return false }
+    let digits = value.dropLast()
+    let last = value.last!
+    if "bkmgt".contains(last) {
+        return !digits.isEmpty
+            && digits.unicodeScalars.allSatisfy(CharacterSet.decimalDigits.contains)
+    }
+    return value.unicodeScalars.allSatisfy(CharacterSet.decimalDigits.contains)
 }
 
 /// True for whole-disk identifiers (`disk0`, `disk2`, `disk10`).

@@ -77,7 +77,72 @@ final class DiskCommandBuildersTests: XCTestCase {
         XCTAssertEqual(command.arguments, ["attach", "-nomount", "/tmp/bootcard.dmg"])
     }
 
-    func testDevicePathDerivation() {
+    func testHdiutilAttachPlistCommand() throws {
+        let command = try hdiutilAttachPlistCommand(imagePath: "/tmp/bootcard.sparseimage")
+        XCTAssertEqual(command.executablePath, "/usr/bin/hdiutil")
+        XCTAssertEqual(command.arguments, ["attach", "-nomount", "-plist", "/tmp/bootcard.sparseimage"])
+    }
+
+    func testHdiutilCreateCommand() throws {
+        let command = try hdiutilCreateCommand(imagePath: "/tmp/bootcard.sparseimage", sizeString: "80m")
+        XCTAssertEqual(command.executablePath, "/usr/bin/hdiutil")
+        XCTAssertEqual(command.arguments, [
+            "create", "-size", "80m", "-type", "SPARSE", "-layout", "NONE",
+            "/tmp/bootcard.sparseimage",
+        ])
+    }
+
+    func testHdiutilDetachCommand() throws {
+        let command = try hdiutilDetachCommand(devicePath: "/dev/disk4")
+        XCTAssertEqual(command.executablePath, "/usr/bin/hdiutil")
+        XCTAssertEqual(command.arguments, ["detach", "/dev/disk4"])
+    }
+
+    func testParseHdiutilAttachPlistReturnsWholeDisk() throws {
+        // A partition entity listed first must be skipped; the
+        // whole-disk entity is the attached node.
+        let plist: [String: Any] = [
+            "system-entities": [
+                ["device-identifier": "disk4s1", "dev-entry": "/dev/disk4s1"],
+                ["device-identifier": "disk4", "dev-entry": "/dev/disk4"],
+            ],
+        ]
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: plist, format: .xml, options: 0
+        )
+        XCTAssertEqual(try parseHdiutilAttachPlist(data), "disk4")
+    }
+
+    func testParseHdiutilAttachPlistRejectsBadInput() throws {
+        XCTAssertThrowsError(try parseHdiutilAttachPlist(Data("not a plist".utf8))) { error in
+            XCTAssertEqual(error as? HdiutilAttachParseError, .invalidPlist)
+        }
+        let wrongShape = try PropertyListSerialization.data(
+            fromPropertyList: ["foo": "bar"], format: .xml, options: 0
+        )
+        XCTAssertThrowsError(try parseHdiutilAttachPlist(wrongShape)) { error in
+            XCTAssertEqual(error as? HdiutilAttachParseError, .unexpectedFormat)
+        }
+        let partitionOnly: [String: Any] = [
+            "system-entities": [["device-identifier": "disk4s1"]],
+        ]
+        let partitionData = try PropertyListSerialization.data(
+            fromPropertyList: partitionOnly, format: .xml, options: 0
+        )
+        XCTAssertThrowsError(try parseHdiutilAttachPlist(partitionData)) { error in
+            XCTAssertEqual(error as? HdiutilAttachParseError, .noWholeDisk)
+        }
+    }
+
+    func testNewHdiutilBuildersRejectMalformedInput() {
+        XCTAssertThrowsError(try hdiutilCreateCommand(imagePath: "relative/image.sparseimage", sizeString: "80m"))
+        XCTAssertThrowsError(try hdiutilCreateCommand(imagePath: "/tmp/image.sparseimage", sizeString: ""))
+        XCTAssertThrowsError(try hdiutilCreateCommand(imagePath: "/tmp/image.sparseimage", sizeString: "80m; rm"))
+        XCTAssertThrowsError(try hdiutilCreateCommand(imagePath: "/tmp/image.sparseimage", sizeString: "1x"))
+        XCTAssertThrowsError(try hdiutilAttachPlistCommand(imagePath: "relative/image.sparseimage"))
+        XCTAssertThrowsError(try hdiutilDetachCommand(devicePath: "/dev/disk4s1"))
+        XCTAssertThrowsError(try hdiutilDetachCommand(devicePath: "disk4"))
+    }
         XCTAssertEqual(devicePath(for: "disk2"), "/dev/disk2")
         XCTAssertEqual(rawDevicePath(for: "disk2"), "/dev/rdisk2")
         XCTAssertEqual(partitionDevicePath(for: "disk2"), "/dev/disk2s1")
@@ -125,6 +190,9 @@ final class DiskCommandBuildersTests: XCTestCase {
             try ddWriteCommand(inputPath: "/tmp/in.tmp", devicePath: "/dev/rdisk2"),
             try ddReadCommand(devicePath: "/dev/rdisk2", outputPath: "/tmp/out.tmp", sectorCount: 1),
             try hdiutilAttachCommand(imagePath: "/tmp/image.dmg"),
+            try hdiutilAttachPlistCommand(imagePath: "/tmp/image.sparseimage"),
+            try hdiutilCreateCommand(imagePath: "/tmp/image.sparseimage", sizeString: "80m"),
+            try hdiutilDetachCommand(devicePath: "/dev/disk4"),
         ]
         // `=` is allowed (dd's if=/of= syntax); everything that could
         // split or redirect a shell command is not.
