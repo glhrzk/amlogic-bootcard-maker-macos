@@ -190,42 +190,39 @@ final class AuthorizationRunner: DiskCommandRunner {
     func run(_ command: DiskCommand) throws -> Int32 {
         // Build a null-terminated C argument vector. The strings are
         // copied with `strdup` (malloc) and freed with `free` below.
-        // `strdup` returns nil only on allocation failure; that is a
-        // spawn failure, reported as such.
-        var cStrings: [UnsafeMutablePointer<CChar>] = []
-        cStrings.reserveCapacity(command.arguments.count)
-        for argument in command.arguments {
-            guard let copied = strdup(argument) else {
-                for pointer in cStrings { free(pointer) }
-                throw DiskIOError.spawnFailed
-            }
-            cStrings.append(copied)
-        }
+        // The final element is nil, which is the terminator the
+        // privileged tool call reads. The vector is only valid for
+        // the duration of that call, which copies the arguments when
+        // it starts the tool. The buffer type is exactly what the C
+        // wrapper's `char *const *` parameter imports as in Swift:
+        // an immutable pointer to optional mutable C strings.
+        var cStrings: [UnsafeMutablePointer<CChar>?] = command.arguments.map { strdup($0) }
+        cStrings.append(nil)
         defer {
-            for pointer in cStrings { free(pointer) }
-        }
-        // The vector itself is allocated with `calloc`, so the final
-        // slot is already NULL, and it is only valid for the duration
-        // of the privileged tool call, which copies the arguments
-        // when it starts the tool. The buffer type is exactly what
-        // the C wrapper's `char *const *` parameter imports as in
-        // Swift: an immutable pointer to mutable C strings.
-        guard let rawArgv = calloc(cStrings.count + 1, MemoryLayout<UnsafeMutablePointer<CChar>>.stride) else {
-            throw DiskIOError.spawnFailed
-        }
-        defer { free(rawArgv) }
-        let argv = rawArgv.assumingMemoryBound(to: UnsafeMutablePointer<CChar>.self)
-        for (index, pointer) in cStrings.enumerated() {
-            argv[index] = pointer
+            for pointer in cStrings {
+                if let pointer {
+                    free(pointer)
+                }
+            }
         }
         var pipe: UnsafeMutablePointer<FILE>?
         let status: OSStatus = command.executablePath.withCString { toolPath in
-            BootcardExecuteWithPrivileges(
-                authorization,
-                toolPath,
-                argv,
-                &pipe
-            )
+            cStrings.withUnsafeBufferPointer { buffer in
+                // The vector always holds at least the nil
+                // terminator, so the buffer is never empty and this
+                // address is never nil in practice. The guard only
+                // covers the impossible empty case, reported as a
+                // spawn failure by the status check below.
+                guard let argv = buffer.baseAddress else {
+                    return errAuthorizationFail
+                }
+                return BootcardExecuteWithPrivileges(
+                    authorization,
+                    toolPath,
+                    argv,
+                    &pipe
+                )
+            }
         }
         guard status == errAuthorizationSuccess else {
             throw DiskIOError.spawnFailed
