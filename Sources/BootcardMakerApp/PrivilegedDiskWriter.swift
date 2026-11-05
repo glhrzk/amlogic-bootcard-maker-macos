@@ -151,10 +151,9 @@ final class AuthorizationRunner: DiskCommandRunner {
         let copyStatus: OSStatus = "system.privilege.admin".withCString { namePointer in
             var item = AuthorizationItem(
                 name: namePointer,
-                nameLength: 0,
                 valueLength: 0,
                 value: nil,
-                flags: []
+                flags: 0
             )
             var rights = AuthorizationRights(count: 1, items: &item)
             let flags: AuthorizationFlags = [
@@ -175,30 +174,44 @@ final class AuthorizationRunner: DiskCommandRunner {
 
     func run(_ command: DiskCommand) throws -> Int32 {
         // Build a null-terminated C argument vector. The strings are
-        // copied with `strdup` (malloc) and freed with `free` below;
-        // the vector itself is only valid for the duration of the
-        // `AuthorizationExecuteWithPrivileges` call, which copies the
-        // arguments when it starts the tool.
-        var cStrings: [UnsafeMutablePointer<CChar>?] = command.arguments.map { strdup($0) }
-        cStrings.append(nil)
-        defer {
-            for pointer in cStrings {
-                if let pointer {
-                    free(pointer)
-                }
+        // copied with `strdup` (malloc) and freed with `free` below.
+        // `strdup` returns nil only on allocation failure; that is a
+        // spawn failure, reported as such.
+        var cStrings: [UnsafeMutablePointer<CChar>] = []
+        cStrings.reserveCapacity(command.arguments.count)
+        for argument in command.arguments {
+            guard let copied = strdup(argument) else {
+                for pointer in cStrings { free(pointer) }
+                throw DiskIOError.spawnFailed
             }
+            cStrings.append(copied)
+        }
+        defer {
+            for pointer in cStrings { free(pointer) }
+        }
+        // The vector itself is allocated with `calloc`, so the final
+        // slot is already NULL, and it is only valid for the duration
+        // of the `AuthorizationExecuteWithPrivileges` call, which
+        // copies the arguments when it starts the tool. The buffer
+        // type is exactly what the current SDK's import of that
+        // function expects: an immutable pointer to mutable C strings.
+        guard let rawArgv = calloc(cStrings.count + 1, MemoryLayout<UnsafeMutablePointer<CChar>>.stride) else {
+            throw DiskIOError.spawnFailed
+        }
+        defer { free(rawArgv) }
+        let argv = rawArgv.assumingMemoryBound(to: UnsafeMutablePointer<CChar>.self)
+        for (index, pointer) in cStrings.enumerated() {
+            argv[index] = pointer
         }
         var pipe: UnsafeMutablePointer<FILE>?
         let status: OSStatus = command.executablePath.withCString { toolPath in
-            cStrings.withUnsafeMutableBufferPointer { buffer in
-                AuthorizationExecuteWithPrivileges(
-                    authorization,
-                    toolPath,
-                    [],
-                    buffer.baseAddress,
-                    &pipe
-                )
-            }
+            AuthorizationExecuteWithPrivileges(
+                authorization,
+                toolPath,
+                [],
+                argv,
+                &pipe
+            )
         }
         guard status == errAuthorizationSuccess else {
             throw DiskIOError.spawnFailed
