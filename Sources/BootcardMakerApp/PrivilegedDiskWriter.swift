@@ -150,6 +150,7 @@ final class AuthorizationRunner: DiskCommandRunner {
         let copyStatus: OSStatus = "system.privilege.admin".withCString { namePointer in
             var item = AuthorizationItem(
                 name: namePointer,
+                nameLength: 0,
                 valueLength: 0,
                 value: nil,
                 flags: []
