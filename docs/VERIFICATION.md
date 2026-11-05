@@ -99,12 +99,12 @@ Test files and counts (as written; counts to be confirmed by the run):
   fixture parsing, boot-disk exclusion, partition exclusion,
   built-in-reader disk included with its flags, removable/external
   sorting.
-- `Tests/BootcardCoreTests/DiskCommandBuildersTests.swift` — 15
+- `Tests/BootcardCoreTests/DiskCommandBuildersTests.swift` — 16
   tests: argument arrays for `diskutil unmountDisk`,
   `newfs_msdos -F 32`, and `hdiutil attach`, device-path validation,
   partition-path derivation.
 
-Total: 31 tests. The fixture
+Total: 32 tests. The fixture
 `Tests/BootcardCoreTests/Fixtures/diskutil-list-sample.plist` is
 synthetic test data, not a real disk listing. It was inspected on
 Linux only; the parsing tests that read it are Mac-gated.
@@ -113,7 +113,7 @@ Linux only; the parsing tests that read it are Mac-gated.
 
 ```text
 swift test output: (paste exact output, or "not run yet")
-Tests passed / total: ___ / 31
+Tests passed / total: ___ / 32
 Date and machine: ___
 ```
 

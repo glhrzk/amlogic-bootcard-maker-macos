@@ -18,7 +18,8 @@ let package = Package(
         ),
         .testTarget(
             name: "BootcardCoreTests",
-            dependencies: ["BootcardCore"]
+            dependencies: ["BootcardCore"],
+            resources: [.copy("Fixtures")]
         )
     ]
 )

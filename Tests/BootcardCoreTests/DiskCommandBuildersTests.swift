@@ -143,6 +143,8 @@ final class DiskCommandBuildersTests: XCTestCase {
         XCTAssertThrowsError(try hdiutilDetachCommand(devicePath: "/dev/disk4s1"))
         XCTAssertThrowsError(try hdiutilDetachCommand(devicePath: "disk4"))
     }
+
+    func testDevicePathDerivation() throws {
         XCTAssertEqual(devicePath(for: "disk2"), "/dev/disk2")
         XCTAssertEqual(rawDevicePath(for: "disk2"), "/dev/rdisk2")
         XCTAssertEqual(partitionDevicePath(for: "disk2"), "/dev/disk2s1")
