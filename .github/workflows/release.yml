@@ -1,0 +1,52 @@
+# Rolling release of the built .app.
+#
+# Every push to main runs the tests, builds the app with
+# scripts/build-app.sh, and publishes BootcardMaker-macos.zip to the
+# "continuous" prerelease. The zip is replaced on every run, so the
+# prerelease always holds the latest main build. No third-party
+# release action is used; publishing is done with the gh CLI only.
+#
+# This workflow cannot run on a Linux machine: it needs a macOS
+# runner for Swift, SwiftUI, and ditto. The first run is GitHub-gated
+# and happens after the next push to main.
+
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        run: swift test
+
+      - name: Build the app
+        run: |
+          scripts/build-app.sh
+          test -d dist/BootcardMaker.app || { echo "Error: dist/BootcardMaker.app was not produced" >&2; exit 1; }
+
+      - name: Zip the app
+        run: ditto -c -k --keepParent dist/BootcardMaker.app BootcardMaker-macos.zip
+
+      - name: Publish rolling prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view continuous >/dev/null 2>&1; then
+            gh release create continuous \
+              --prerelease \
+              --title "Latest build" \
+              --notes "Automated build from commit ${{ github.sha }}. Read the README safety warnings before use: this app erases the disk you choose. Check the disk name, identifier, and size on the confirmation sheet before pressing Erase and Make."
+          fi
+          gh release upload continuous BootcardMaker-macos.zip --clobber

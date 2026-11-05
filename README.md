@@ -55,6 +55,19 @@ again in the dialog. After that, the app opens normally.
 > See `docs/VERIFICATION.md`. Do not treat this README as proof that
 > the build works.
 
+## Releases
+
+Every push to the `main` branch runs the GitHub Actions workflow in
+`.github/workflows/release.yml`: it runs `swift test`, builds the app
+with `scripts/build-app.sh`, and publishes `BootcardMaker-macos.zip`
+to the `continuous` prerelease. Each run replaces the zip, so the
+prerelease always holds the latest `main` build. The workflow can also
+be run by hand from the Actions tab.
+
+Releases currently carry the placeholder bundle identifier
+`com.example.bootcardmaker` (see "Before publishing" below). The
+identifier stays a placeholder until the owner confirms a real one.
+
 ## Run
 
 1. Insert the SD card.
