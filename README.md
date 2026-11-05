@@ -49,6 +49,19 @@ certificate and it is not notarised. To run it the first time,
 right-click (or Control-click) the app, choose Open, then choose Open
 again in the dialog. After that, the app opens normally.
 
+If macOS instead shows "Apple could not verify "BootcardMaker" is free
+of malware", remove the download quarantine flag from the app, then
+open it normally:
+
+```sh
+xattr -dr com.apple.quarantine /path/to/BootcardMaker.app
+```
+
+Replace `/path/to/BootcardMaker.app` with the app's actual location.
+Only do this for a build from this repository. The flag is how macOS
+marks downloaded files; removing it stops Gatekeeper from blocking
+this app, and it does not disable Gatekeeper for anything else.
+
 > **Honest status:** the Swift code and this build script have not been
 > run on a Mac yet. They were written and statically reviewed on a
 > Linux machine. Building and running them on a Mac is the next step.
