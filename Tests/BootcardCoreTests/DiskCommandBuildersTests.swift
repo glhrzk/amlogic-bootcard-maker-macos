@@ -115,13 +115,13 @@ final class DiskCommandBuildersTests: XCTestCase {
 
     func testParseHdiutilAttachPlistRejectsBadInput() throws {
         XCTAssertThrowsError(try parseHdiutilAttachPlist(Data("not a plist".utf8))) { error in
-            XCTAssertEqual(error as? HdiutilAttachParseError, .invalidPlist)
+            XCTest.XCTAssertEqual(error as? HdiutilAttachParseError, .invalidPlist)
         }
         let wrongShape = try PropertyListSerialization.data(
             fromPropertyList: ["foo": "bar"], format: .xml, options: 0
         )
         XCTAssertThrowsError(try parseHdiutilAttachPlist(wrongShape)) { error in
-            XCTAssertEqual(error as? HdiutilAttachParseError, .unexpectedFormat)
+            XCTest.XCTAssertEqual(error as? HdiutilAttachParseError, .unexpectedFormat)
         }
         let partitionOnly: [String: Any] = [
             "system-entities": [["device-identifier": "disk4s1"]],
@@ -130,7 +130,7 @@ final class DiskCommandBuildersTests: XCTestCase {
             fromPropertyList: partitionOnly, format: .xml, options: 0
         )
         XCTAssertThrowsError(try parseHdiutilAttachPlist(partitionData)) { error in
-            XCTAssertEqual(error as? HdiutilAttachParseError, .noWholeDisk)
+            XCTest.XCTAssertEqual(error as? HdiutilAttachParseError, .noWholeDisk)
         }
     }
 
