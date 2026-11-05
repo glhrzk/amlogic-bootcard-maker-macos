@@ -1,3 +1,4 @@
+import BootcardCore
 import Foundation
 import Security
 

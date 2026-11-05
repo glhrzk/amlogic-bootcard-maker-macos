@@ -1,3 +1,4 @@
+import BootcardCore
 import Foundation
 
 /// The disk operation: validate, elevate, unmount, optionally
