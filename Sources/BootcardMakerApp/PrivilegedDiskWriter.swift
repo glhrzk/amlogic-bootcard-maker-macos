@@ -1,4 +1,5 @@
 import BootcardCore
+import CPrivilegedExecution
 import Foundation
 import Security
 
@@ -110,21 +111,27 @@ struct ProcessRunner: DiskCommandRunner {
 ///
 /// Mechanism: Security framework Authorization Services
 /// (`AuthorizationCreate` + `AuthorizationCopyRights` for the
-/// `system.privilege.admin` right, then
-/// `AuthorizationExecuteWithPrivileges` per tool). This is the only
-/// elevation path available to an ad-hoc-signed, CLT-built app with
-/// no paid developer account: the modern alternative, SMJobBless
-/// with a launchd helper, requires Developer ID signing and is
-/// therefore not usable for this open-source build. The deprecated
-/// `AuthorizationExecuteWithPrivileges` call is isolated here, in
-/// this one type, so replacing it later touches one file.
+/// `system.privilege.admin` right, then one privileged tool run per
+/// tool through the small C wrapper in `CPrivilegedExecution`). This
+/// is the only elevation path available to an ad-hoc-signed,
+/// CLT-built app with no paid developer account: the modern
+/// alternative, SMJobBless with a launchd helper, requires Developer
+/// ID signing and is therefore not usable for this open-source
+/// build. The deprecated privileged-execution call is isolated to
+/// the C wrapper plus this one type, so replacing it later touches
+/// those two files only.
 ///
-/// Mac-gated and unverified on Tahoe: whether the deprecated call is
-/// still present and functional on macOS 26 has not been proven on
+/// Mac-gated and unverified on Tahoe: Swift cannot call
+/// `AuthorizationExecuteWithPrivileges` directly at all, because the
+/// macOS 26 SDK marks it unavailable in Swift (deprecated as of
+/// macOS 10.9 and earlier). The C wrapper calls it from C, where it
+/// is only a deprecation warning. Whether the deprecated call is
+/// still functional at runtime on macOS 26 has not been proven on
 /// this Linux VM, and a build or runtime failure here must be
 /// reported as `elevationDenied` (or a build failure), never worked
 /// around by writing to the disk without elevation. If the call is
-/// absent on Tahoe, this file is where the replacement goes.
+/// absent at runtime on Tahoe, the C wrapper is where the
+/// replacement goes.
 ///
 /// Exit status: `AuthorizationExecuteWithPrivileges` reports no exit
 /// status directly. The communications pipe is drained to EOF, which
@@ -155,11 +162,19 @@ final class AuthorizationRunner: DiskCommandRunner {
                 value: nil,
                 flags: 0
             )
-            var rights = AuthorizationRights(count: 1, items: &item)
-            let flags: AuthorizationFlags = [
-                .interactionAllowed, .extendRights, .preAuthorize,
-            ]
-            return AuthorizationCopyRights(createdRef, &rights, nil, flags, nil)
+            // `AuthorizationRights` stores the items pointer, so the
+            // pointer must stay valid until `AuthorizationCopyRights`
+            // returns. `withUnsafeMutablePointer` gives that scope;
+            // passing `&item` straight into the initializer does not,
+            // because that pointer would only live for the
+            // initializer call itself (Swift 6.2 warns about this).
+            return withUnsafeMutablePointer(to: &item) { itemPointer in
+                var rights = AuthorizationRights(count: 1, items: itemPointer)
+                let flags: AuthorizationFlags = [
+                    .interactionAllowed, .extendRights, .preAuthorize,
+                ]
+                return AuthorizationCopyRights(createdRef, &rights, nil, flags, nil)
+            }
         }
         guard copyStatus == errAuthorizationSuccess else {
             _ = AuthorizationFree(createdRef, [])
@@ -191,10 +206,10 @@ final class AuthorizationRunner: DiskCommandRunner {
         }
         // The vector itself is allocated with `calloc`, so the final
         // slot is already NULL, and it is only valid for the duration
-        // of the `AuthorizationExecuteWithPrivileges` call, which
-        // copies the arguments when it starts the tool. The buffer
-        // type is exactly what the current SDK's import of that
-        // function expects: an immutable pointer to mutable C strings.
+        // of the privileged tool call, which copies the arguments
+        // when it starts the tool. The buffer type is exactly what
+        // the C wrapper's `char *const *` parameter imports as in
+        // Swift: an immutable pointer to mutable C strings.
         guard let rawArgv = calloc(cStrings.count + 1, MemoryLayout<UnsafeMutablePointer<CChar>>.stride) else {
             throw DiskIOError.spawnFailed
         }
@@ -205,10 +220,9 @@ final class AuthorizationRunner: DiskCommandRunner {
         }
         var pipe: UnsafeMutablePointer<FILE>?
         let status: OSStatus = command.executablePath.withCString { toolPath in
-            AuthorizationExecuteWithPrivileges(
+            BootcardExecuteWithPrivileges(
                 authorization,
                 toolPath,
-                [],
                 argv,
                 &pipe
             )

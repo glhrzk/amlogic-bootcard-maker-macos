@@ -12,9 +12,14 @@ let package = Package(
     ],
     targets: [
         .target(name: "BootcardCore"),
+        .target(
+            name: "CPrivilegedExecution",
+            linkerSettings: [.linkedFramework("Security")]
+        ),
         .executableTarget(
             name: "BootcardMakerApp",
-            dependencies: ["BootcardCore"]
+            dependencies: ["BootcardCore", "CPrivilegedExecution"],
+            linkerSettings: [.linkedFramework("Security")]
         ),
         .testTarget(
             name: "BootcardCoreTests",
