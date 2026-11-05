@@ -206,23 +206,29 @@ final class AuthorizationRunner: DiskCommandRunner {
             }
         }
         var pipe: UnsafeMutablePointer<FILE>?
-        let status: OSStatus = command.executablePath.withCString { toolPath in
-            cStrings.withUnsafeBufferPointer { buffer in
-                // The vector always holds at least the nil
-                // terminator, so the buffer is never empty and this
-                // address is never nil in practice. The guard only
-                // covers the impossible empty case, reported as a
-                // spawn failure by the status check below.
-                guard let argv = buffer.baseAddress else {
-                    return errAuthorizationFail
+        // `withCString` and `withUnsafeBufferPointer` are both
+        // rethrows, so the impossible empty-buffer case throws the
+        // same spawn failure the status check below would report.
+        let status: OSStatus
+        do {
+            status = try command.executablePath.withCString { toolPath in
+                try cStrings.withUnsafeBufferPointer { buffer in
+                    // The vector always holds at least the nil
+                    // terminator, so the buffer is never empty and
+                    // this address is never nil in practice.
+                    guard let argv = buffer.baseAddress else {
+                        throw DiskIOError.spawnFailed
+                    }
+                    return BootcardExecuteWithPrivileges(
+                        authorization,
+                        toolPath,
+                        argv,
+                        &pipe
+                    )
                 }
-                return BootcardExecuteWithPrivileges(
-                    authorization,
-                    toolPath,
-                    argv,
-                    &pipe
-                )
             }
+        } catch {
+            throw DiskIOError.spawnFailed
         }
         guard status == errAuthorizationSuccess else {
             throw DiskIOError.spawnFailed
