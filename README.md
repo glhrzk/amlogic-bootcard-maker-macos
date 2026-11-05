@@ -64,9 +64,7 @@ to the `continuous` prerelease. Each run replaces the zip, so the
 prerelease always holds the latest `main` build. The workflow can also
 be run by hand from the Actions tab.
 
-Releases currently carry the placeholder bundle identifier
-`com.example.bootcardmaker` (see "Before publishing" below). The
-identifier stays a placeholder until the owner confirms a real one.
+Releases carry the bundle identifier `com.glhrzk.bootcardmaker`.
 
 ## Run
 
@@ -145,12 +143,9 @@ instead of over-reading. See `docs/RECOVERY-NOTES.md`.
 
 ## Before publishing
 
-Two placeholder lines must be confirmed by the owner before this code
-is published or released:
+One placeholder line remains to be confirmed by the owner:
 
-1. The bundle identifier in `scripts/build-app.sh`:
-   `com.example.bootcardmaker`. Replace it with the real identifier.
-2. The copyright line in `LICENSE`:
+1. The copyright line in `LICENSE`:
    `BootcardMaker for macOS contributors`. Replace it with the real
    copyright holder.
 

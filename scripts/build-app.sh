@@ -62,7 +62,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 	<key>CFBundleExecutable</key>
 	<string>BootcardMaker</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.example.bootcardmaker</string>
+	<string>com.glhrzk.bootcardmaker</string>
 	<key>CFBundleName</key>
 	<string>BootcardMaker</string>
 	<key>CFBundlePackageType</key>
@@ -82,8 +82,7 @@ cat > "$CONTENTS_DIR/Info.plist" <<'PLIST'
 PLIST
 
 # Ad-hoc sign. Best effort: warn, do not fail the build.
-# NOTE: com.example.bootcardmaker is a placeholder identifier.
-# Change it before publishing.
+# Bundle identifier: com.glhrzk.bootcardmaker.
 if codesign --force --deep -s - "$APP_DIR" 2>/dev/null; then
     echo "Ad-hoc signed: $APP_DIR"
 else
@@ -93,5 +92,4 @@ fi
 echo ""
 echo "Built: $APP_DIR"
 echo "To run an unsigned build: right-click BootcardMaker.app, choose Open, then Open again."
-echo "NOTE: CFBundleIdentifier 'com.example.bootcardmaker' is a placeholder."
-echo "Change it before publishing."
+echo "Bundle identifier: com.glhrzk.bootcardmaker"
